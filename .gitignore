@@ -16,6 +16,8 @@ database.sqlite
 *.log
 prisma/dev.sqlite
 prisma/dev.sqlite-journal
+dev.sqlite
+dev.sqlite-journal
 
 
 
