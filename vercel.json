@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "framework": "react-router",
+  "installCommand": "npm install",
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "app/**": {
+      "maxDuration": 30
+    }
+  }
+}
