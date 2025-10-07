@@ -59,11 +59,17 @@ export async function loader({ request, params }) {
                   compareAtPrice
                   inventoryQuantity
                   availableForSale
-                  weight
-                  weightUnit
                   selectedOptions {
                     name
                     value
+                  }
+                  inventoryItem {
+                    measurement {
+                      weight {
+                        unit
+                        value
+                      }
+                    }
                   }
                 }
               }
@@ -118,6 +124,15 @@ export default function ProductDetailsPage() {
     });
   };
 
+  const formatWeight = (variant) => {
+    const weightData = variant.inventoryItem?.measurement?.weight;
+    if (weightData?.value) {
+      const unit = weightData.unit?.toLowerCase() || '';
+      return `${weightData.value} ${unit}`;
+    }
+    return "—";
+  };
+
   const variantRows = product?.variants.edges.map(({ node }) => [
     node.title,
     node.sku || "—",
@@ -125,7 +140,7 @@ export default function ProductDetailsPage() {
     node.compareAtPrice ? formatPrice(node.compareAtPrice) : "—",
     node.inventoryQuantity.toString(),
     node.availableForSale ? "Yes" : "No",
-    node.weight ? `${node.weight} ${node.weightUnit}` : "—",
+    formatWeight(node),
   ]);
 
   return (
