@@ -112,9 +112,11 @@ export default function ProductDetailsPage() {
   const formatPrice = (price) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
     }).format(price);
   };
+
+  
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
