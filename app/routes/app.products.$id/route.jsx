@@ -8,7 +8,6 @@ import {
   BlockStack,
   InlineStack,
   Divider,
-  Thumbnail,
   DataTable,
 } from "@shopify/polaris";
 import { authenticate } from "../../shopify.server";
@@ -16,11 +15,11 @@ import { authenticate } from "../../shopify.server";
 export async function loader({ request, params }) {
   try {
     const { admin } = await authenticate.admin(request);
-    
+
     if (!params.id) {
       throw new Response("Product ID is required", { status: 400 });
     }
-    
+
     const productId = `gid://shopify/Product/${params.id}`;
 
     const response = await admin.graphql(
@@ -79,16 +78,16 @@ export async function loader({ request, params }) {
         }`,
       {
         variables: { id: productId },
-      }
+      },
     );
 
     const data = await response.json();
-    
+
     if (data.errors) {
       console.error("GraphQL errors:", data.errors);
       throw new Response("Failed to fetch product", { status: 500 });
     }
-    
+
     if (!data.data?.product) {
       throw new Response("Product not found", { status: 404 });
     }
@@ -96,11 +95,11 @@ export async function loader({ request, params }) {
     return { product: data.data.product };
   } catch (error) {
     console.error("Loader error:", error);
-    
+
     if (error instanceof Response) {
       throw error;
     }
-    
+
     throw new Response("Internal server error", { status: 500 });
   }
 }
@@ -116,8 +115,6 @@ export default function ProductDetailsPage() {
     }).format(price);
   };
 
-  
-
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -129,7 +126,7 @@ export default function ProductDetailsPage() {
   const formatWeight = (variant) => {
     const weightData = variant.inventoryItem?.measurement?.weight;
     if (weightData?.value) {
-      const unit = weightData.unit?.toLowerCase() || '';
+      const unit = weightData.unit?.toLowerCase() || "";
       return `${weightData.value} ${unit}`;
     }
     return "—";
@@ -159,26 +156,88 @@ export default function ProductDetailsPage() {
         <Layout.Section>
           <BlockStack gap="500">
             {/* Product Images */}
+            {/* Product Images */}
             <Card>
               <BlockStack gap="400">
                 <Text variant="headingMd" as="h2">
                   Product Images
                 </Text>
-                <InlineStack gap="400" wrap>
-                  {product?.images.edges.map(({ node }, index) => (
-                    <Thumbnail
-                      key={index}
-                      source={node.url}
-                      alt={node.altText || `Product image ${index + 1}`}
-                      size="large"
-                    />
-                  ))}
-                  {product?.images.edges.length === 0 && (
-                    <Text as="p" tone="subdued">
-                      No images available
-                    </Text>
-                  )}
-                </InlineStack>
+                {product?.images.edges.length > 0 ? (
+                  <div style={{ width: "100%" }}>
+                    {/* Featured/First Image - Large */}
+                    <div
+                      style={{
+                        width: "100%",
+                        maxWidth: "600px",
+                        margin: "0 auto 1rem auto",
+                      }}
+                    >
+                      <img
+                        src={product.images.edges[0].node.url}
+                        alt={
+                          product.images.edges[0].node.altText ||
+                          "Product image"
+                        }
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          borderRadius: "8px",
+                          border: "1px solid #e1e3e5",
+                          display: "block",
+                        }}
+                      />
+                    </div>
+
+                    {/* Additional Images - Responsive Grid */}
+                    {product.images.edges.length > 1 && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            "repeat(auto-fit, minmax(120px, 1fr))",
+                          gap: "12px",
+                          maxWidth: "800px",
+                          margin: "0 auto",
+                        }}
+                      >
+                        {product.images.edges
+                          .slice(1)
+                          .map(({ node }, index) => (
+                            <div
+                              key={index + 1}
+                              style={{
+                                width: "100%",
+                                paddingBottom: "100%",
+                                position: "relative",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid #e1e3e5",
+                              }}
+                            >
+                              <img
+                                src={node.url}
+                                alt={
+                                  node.altText || `Product image ${index + 2}`
+                                }
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Text as="p" tone="subdued">
+                    No images available
+                  </Text>
+                )}
               </BlockStack>
             </Card>
 
@@ -207,7 +266,11 @@ export default function ProductDetailsPage() {
                     <Text as="span" fontWeight="semibold">
                       Total Inventory:
                     </Text>
-                    <Badge status={product?.totalInventory > 0 ? "success" : "warning"}>
+                    <Badge
+                      status={
+                        product?.totalInventory > 0 ? "success" : "warning"
+                      }
+                    >
                       {product?.totalInventory} units
                     </Badge>
                   </InlineStack>
