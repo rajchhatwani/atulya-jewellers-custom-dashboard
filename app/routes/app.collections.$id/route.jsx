@@ -161,6 +161,11 @@ export default function ProductsPage() {
     setSearchParams({ page: "1" }); // Reset to first page on search
   };
 
+  const handleProductClick = (productId) => {
+    const numericId = productId.split('/').pop();
+    navigate(`/app/products/${numericId}`);
+  };
+
   const rows = paginatedProducts.map((product) => [
     <Thumbnail
       key={`thumb-${product.id}`}
@@ -168,7 +173,22 @@ export default function ProductsPage() {
       alt={product.imageAlt}
       size="small"
     />,
-    product.title,
+    <button
+      type="button"
+      key={`btn-${product.id}`}
+      onClick={() => handleProductClick(product.id)}
+      style={{
+        background: "none",
+        border: "none",
+        color: "#2c6ecb",
+        cursor: "pointer",
+        textAlign: "left",
+        padding: 0,
+        font: "inherit",
+      }}
+    >
+      {product.title}
+    </button>,
     product.weight,
     formatPrice(product.price),
     product.barcode,
