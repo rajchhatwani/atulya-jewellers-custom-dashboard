@@ -14,71 +14,89 @@ import {
 import { authenticate } from "../../shopify.server";
 
 export async function loader({ request, params }) {
-  const { admin } = await authenticate.admin(request);
-  const productId = `gid://shopify/Product/${params.id}`;
+  try {
+    const { admin } = await authenticate.admin(request);
+    
+    if (!params.id) {
+      throw new Response("Product ID is required", { status: 400 });
+    }
+    
+    const productId = `gid://shopify/Product/${params.id}`;
 
-  const response = await admin.graphql(
-    `#graphql
-      query getProduct($id: ID!) {
-        product(id: $id) {
-          id
-          title
-          description
-          descriptionHtml
-          status
-          vendor
-          productType
-          tags
-          createdAt
-          updatedAt
-          featuredImage {
-            url
-            altText
-          }
-          images(first: 10) {
-            edges {
-              node {
-                url
-                altText
-              }
+    const response = await admin.graphql(
+      `#graphql
+        query getProduct($id: ID!) {
+          product(id: $id) {
+            id
+            title
+            description
+            descriptionHtml
+            status
+            vendor
+            productType
+            tags
+            createdAt
+            updatedAt
+            featuredImage {
+              url
+              altText
             }
-          }
-          variants(first: 100) {
-            edges {
-              node {
-                id
-                title
-                sku
-                price
-                compareAtPrice
-                inventoryQuantity
-                availableForSale
-                weight
-                weightUnit
-                selectedOptions {
-                  name
-                  value
+            images(first: 10) {
+              edges {
+                node {
+                  url
+                  altText
                 }
               }
             }
+            variants(first: 100) {
+              edges {
+                node {
+                  id
+                  title
+                  sku
+                  price
+                  compareAtPrice
+                  inventoryQuantity
+                  availableForSale
+                  weight
+                  weightUnit
+                  selectedOptions {
+                    name
+                    value
+                  }
+                }
+              }
+            }
+            totalInventory
           }
-          totalInventory
-        }
-      }`,
-    {
-      variables: { id: productId },
+        }`,
+      {
+        variables: { id: productId },
+      }
+    );
+
+    const data = await response.json();
+    
+    if (data.errors) {
+      console.error("GraphQL errors:", data.errors);
+      throw new Response("Failed to fetch product", { status: 500 });
     }
-  );
+    
+    if (!data.data?.product) {
+      throw new Response("Product not found", { status: 404 });
+    }
 
-  const data = await response.json();
-  
-  if (!data.data.product) {
-    throw new Response("Product not found", { status: 404 });
+    return { product: data.data.product };
+  } catch (error) {
+    console.error("Loader error:", error);
+    
+    if (error instanceof Response) {
+      throw error;
+    }
+    
+    throw new Response("Internal server error", { status: 500 });
   }
-
-  const product = data.data.product;
-
-  return { product };
 }
 
 export default function ProductDetailsPage() {
