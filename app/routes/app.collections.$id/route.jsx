@@ -8,7 +8,10 @@ import {
   Pagination,
   Text,
   BlockStack,
+  Thumbnail,
+  TextField,
 } from "@shopify/polaris";
+import { useState, useMemo } from "react";
 import { authenticate } from "../../shopify.server";
 
 const PRODUCTS_PER_PAGE = 10;
@@ -89,6 +92,8 @@ export async function loader({ request, params }) {
       return {
         id: node.id,
         title: node.title || "N/A",
+        image: node.featuredImage?.url || null,
+        imageAlt: node.featuredImage?.altText || node.title,
         weight: weightDisplay,
         price: node.priceRangeV2.minVariantPrice,
         barcode: variant?.barcode || "N/A",
@@ -97,21 +102,10 @@ export async function loader({ request, params }) {
     })
     .filter(product => product.availableUnits > 0); // Show only available products
 
-  const totalProducts = allProducts.length;
-  const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
-  const currentPage = Math.min(Math.max(1, page), totalPages || 1);
-  
-  const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
-  const endIndex = startIndex + PRODUCTS_PER_PAGE;
-  const paginatedProducts = allProducts.slice(startIndex, endIndex);
-
   const collection = {
     id: data.data.collection.id,
     title: data.data.collection.title,
-    products: paginatedProducts,
-    totalProducts,
-    currentPage,
-    totalPages,
+    products: allProducts,
   };
 
   return { collection };
@@ -121,6 +115,7 @@ export default function ProductsPage() {
   const { collection } = useLoaderData();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat("en-US", {
@@ -129,11 +124,50 @@ export default function ProductsPage() {
     }).format(price.amount);
   };
 
+  // Filter products based on search query
+  const filteredProducts = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return collection?.products || [];
+    }
+
+    const query = searchQuery.toLowerCase();
+    return collection?.products.filter((product) => {
+      return (
+        product.title.toLowerCase().includes(query) ||
+        product.barcode.toLowerCase().includes(query) ||
+        product.weight.toLowerCase().includes(query)
+      );
+    }) || [];
+  }, [collection?.products, searchQuery]);
+
+  // Pagination logic
+  const totalProducts = filteredProducts.length;
+  const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+  const currentPage = Math.min(
+    Math.max(1, parseInt(searchParams.get("page") || "1", 10)),
+    totalPages || 1
+  );
+
+  const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+  const endIndex = startIndex + PRODUCTS_PER_PAGE;
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+
   const handlePageChange = (newPage) => {
     setSearchParams({ page: newPage.toString() });
   };
 
-  const rows = collection?.products.map((product) => [
+  const handleSearchChange = (value) => {
+    setSearchQuery(value);
+    setSearchParams({ page: "1" }); // Reset to first page on search
+  };
+
+  const rows = paginatedProducts.map((product) => [
+    <Thumbnail
+      key={`thumb-${product.id}`}
+      source={product.image || "https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"}
+      alt={product.imageAlt}
+      size="small"
+    />,
     product.title,
     product.weight,
     formatPrice(product.price),
@@ -148,7 +182,7 @@ export default function ProductsPage() {
     >
       <Layout>
         <Layout.Section>
-          {collection?.totalProducts === 0 ? (
+          {collection?.products.length === 0 ? (
             <Card>
               <EmptyState
                 heading="No products available in this collection"
@@ -161,26 +195,46 @@ export default function ProductsPage() {
             <BlockStack gap="400">
               <Card>
                 <BlockStack gap="400">
-                  <Text variant="headingMd" as="h2">
-                    Products ({collection?.totalProducts} available)
-                  </Text>
-                  <DataTable
-                    columnContentTypes={["text", "text", "text", "text", "text"]}
-                    headings={["Product Name", "Weight", "Price", "Barcode", "Available Units"]}
-                    rows={rows}
+                  <TextField
+                    label="Search products"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    placeholder="Search by name, barcode, or weight..."
+                    autoComplete="off"
+                    clearButton
+                    onClearButtonClick={() => handleSearchChange("")}
                   />
+                  
+                  <Text variant="headingMd" as="h2">
+                    Products ({totalProducts} {searchQuery ? "found" : "available"})
+                  </Text>
+                  
+                  {totalProducts === 0 ? (
+                    <EmptyState
+                      heading="No products found"
+                      image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
+                    >
+                      <p>Try adjusting your search terms.</p>
+                    </EmptyState>
+                  ) : (
+                    <DataTable
+                      columnContentTypes={["text", "text", "text", "text", "text", "text"]}
+                      headings={["Image", "Product Name", "Weight", "Price", "Barcode", "Available Units"]}
+                      rows={rows}
+                    />
+                  )}
                 </BlockStack>
               </Card>
               
-              {collection?.totalPages > 1 && (
+              {totalPages > 1 && (
                 <Card>
                   <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
                     <Pagination
-                      hasPrevious={collection.currentPage > 1}
-                      onPrevious={() => handlePageChange(collection.currentPage - 1)}
-                      hasNext={collection.currentPage < collection.totalPages}
-                      onNext={() => handlePageChange(collection.currentPage + 1)}
-                      label={`Page ${collection.currentPage} of ${collection.totalPages}`}
+                      hasPrevious={currentPage > 1}
+                      onPrevious={() => handlePageChange(currentPage - 1)}
+                      hasNext={currentPage < totalPages}
+                      onNext={() => handlePageChange(currentPage + 1)}
+                      label={`Page ${currentPage} of ${totalPages}`}
                     />
                   </div>
                 </Card>
