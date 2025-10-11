@@ -100,7 +100,7 @@ export async function loader({ request, params }) {
         availableUnits: node.totalInventory || 0,
       };
     })
-    .filter(product => product.availableUnits > 0); // Show only available products
+    // .filter(product => product.availableUnits > 0); // Only include products with available inventory
 
   const collection = {
     id: data.data.collection.id,
