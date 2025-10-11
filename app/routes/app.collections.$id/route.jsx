@@ -10,6 +10,9 @@ import {
   BlockStack,
   Thumbnail,
   TextField,
+  Tabs,
+  Button,
+  InlineStack,
 } from "@shopify/polaris";
 import { useState, useMemo } from "react";
 import { authenticate } from "../../shopify.server";
@@ -77,7 +80,6 @@ export async function loader({ request, params }) {
     throw new Response("Collection not found", { status: 404 });
   }
 
-  // Filter products with available inventory by default
   const allProducts = data.data.collection.products.edges
     .map(({ node }) => {
       const variant = node.variants.edges[0]?.node;
@@ -99,8 +101,7 @@ export async function loader({ request, params }) {
         barcode: variant?.barcode || "N/A",
         availableUnits: node.totalInventory || 0,
       };
-    })
-    // .filter(product => product.availableUnits > 0); // Only include products with available inventory
+    });
 
   const collection = {
     id: data.data.collection.id,
@@ -116,6 +117,7 @@ export default function ProductsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTab, setSelectedTab] = useState(0);
 
   const formatPrice = (price) => {
     return new Intl.NumberFormat("en-US", {
@@ -124,21 +126,34 @@ export default function ProductsPage() {
     }).format(price.amount);
   };
 
+  // Filter products by stock status
+  const stockFilteredProducts = useMemo(() => {
+    const allProducts = collection?.products || [];
+    
+    if (selectedTab === 0) {
+      // In Stock tab - products with availableUnits > 0
+      return allProducts.filter((product) => product.availableUnits > 0);
+    } else {
+      // Sold Out tab - products with availableUnits === 0
+      return allProducts.filter((product) => product.availableUnits === 0);
+    }
+  }, [collection?.products, selectedTab]);
+
   // Filter products based on search query
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) {
-      return collection?.products || [];
+      return stockFilteredProducts;
     }
 
     const query = searchQuery.toLowerCase();
-    return collection?.products.filter((product) => {
+    return stockFilteredProducts.filter((product) => {
       return (
         product.title.toLowerCase().includes(query) ||
         product.barcode.toLowerCase().includes(query) ||
         product.weight.toLowerCase().includes(query)
       );
-    }) || [];
-  }, [collection?.products, searchQuery]);
+    });
+  }, [stockFilteredProducts, searchQuery]);
 
   // Pagination logic
   const totalProducts = filteredProducts.length;
@@ -161,9 +176,57 @@ export default function ProductsPage() {
     setSearchParams({ page: "1" }); // Reset to first page on search
   };
 
+  const handleTabChange = (newTab) => {
+    setSelectedTab(newTab);
+    setSearchQuery(""); // Clear search when switching tabs
+    setSearchParams({ page: "1" }); // Reset to first page
+  };
+
   const handleProductClick = (productId) => {
     const numericId = productId.split('/').pop();
     navigate(`/app/products/${numericId}`);
+  };
+
+  // Export to Excel function
+  const exportToExcel = () => {
+    const productsToExport = stockFilteredProducts;
+    
+    if (productsToExport.length === 0) {
+      alert("No products to export");
+      return;
+    }
+
+    // Create CSV content
+    const headers = ["Product Name", "Weight", "Price", "Barcode", "Available Units"];
+    const csvRows = [headers.join(",")];
+
+    productsToExport.forEach((product) => {
+      const row = [
+        `"${product.title.replace(/"/g, '""')}"`, // Escape quotes in title
+        `"${product.weight}"`,
+        formatPrice(product.price),
+        `"${product.barcode}"`,
+        product.availableUnits,
+      ];
+      csvRows.push(row.join(","));
+    });
+
+    const csvContent = csvRows.join("\n");
+    
+    // Create and download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    const tabName = selectedTab === 0 ? "InStock" : "SoldOut";
+    const fileName = `${collection?.title || "Products"}_${tabName}_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const rows = paginatedProducts.map((product) => [
@@ -195,6 +258,19 @@ export default function ProductsPage() {
     product.availableUnits.toString(),
   ]);
 
+  const tabs = [
+    {
+      id: "in-stock",
+      content: "In Stock",
+      panelID: "in-stock-panel",
+    },
+    {
+      id: "sold-out",
+      content: "Sold Out",
+      panelID: "sold-out-panel",
+    },
+  ];
+
   return (
     <Page
       title={collection?.title || "Products"}
@@ -202,39 +278,37 @@ export default function ProductsPage() {
     >
       <Layout>
         <Layout.Section>
-          {collection?.products.length === 0 ? (
+          <BlockStack gap="400">
             <Card>
-              <EmptyState
-                heading="No products available in this collection"
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <p>There are no products with available inventory in this collection.</p>
-              </EmptyState>
-            </Card>
-          ) : (
-            <BlockStack gap="400">
-              <Card>
+              <Tabs tabs={tabs} selected={selectedTab} onSelect={handleTabChange}>
                 <BlockStack gap="400">
-                  <TextField
-                    label="Search products"
-                    value={searchQuery}
-                    onChange={handleSearchChange}
-                    placeholder="Search by name, barcode, or weight..."
-                    autoComplete="off"
-                    clearButton
-                    onClearButtonClick={() => handleSearchChange("")}
-                  />
+                  <InlineStack align="space-between" blockAlign="center">
+                    <TextField
+                      label="Search products"
+                      value={searchQuery}
+                      onChange={handleSearchChange}
+                      placeholder="Search by name, barcode, or weight..."
+                      autoComplete="off"
+                      clearButton
+                      onClearButtonClick={() => handleSearchChange("")}
+                    />
+                    <div style={{ marginTop: "20px", marginLeft: "16px" }}>
+                      <Button onClick={exportToExcel} disabled={stockFilteredProducts.length === 0}>
+                        Export to Excel
+                      </Button>
+                    </div>
+                  </InlineStack>
                   
                   <Text variant="headingMd" as="h2">
-                    Products ({totalProducts} {searchQuery ? "found" : "available"})
+                    Products ({totalProducts} {searchQuery ? "found" : selectedTab === 0 ? "in stock" : "sold out"})
                   </Text>
                   
                   {totalProducts === 0 ? (
                     <EmptyState
-                      heading="No products found"
+                      heading={searchQuery ? "No products found" : `No ${selectedTab === 0 ? "in stock" : "sold out"} products`}
                       image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
                     >
-                      <p>Try adjusting your search terms.</p>
+                      <p>{searchQuery ? "Try adjusting your search terms." : `There are no ${selectedTab === 0 ? "in stock" : "sold out"} products in this collection.`}</p>
                     </EmptyState>
                   ) : (
                     <DataTable
@@ -244,23 +318,23 @@ export default function ProductsPage() {
                     />
                   )}
                 </BlockStack>
+              </Tabs>
+            </Card>
+            
+            {totalPages > 1 && (
+              <Card>
+                <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
+                  <Pagination
+                    hasPrevious={currentPage > 1}
+                    onPrevious={() => handlePageChange(currentPage - 1)}
+                    hasNext={currentPage < totalPages}
+                    onNext={() => handlePageChange(currentPage + 1)}
+                    label={`Page ${currentPage} of ${totalPages}`}
+                  />
+                </div>
               </Card>
-              
-              {totalPages > 1 && (
-                <Card>
-                  <div style={{ display: "flex", justifyContent: "center", padding: "16px 0" }}>
-                    <Pagination
-                      hasPrevious={currentPage > 1}
-                      onPrevious={() => handlePageChange(currentPage - 1)}
-                      hasNext={currentPage < totalPages}
-                      onNext={() => handlePageChange(currentPage + 1)}
-                      label={`Page ${currentPage} of ${totalPages}`}
-                    />
-                  </div>
-                </Card>
-              )}
-            </BlockStack>
-          )}
+            )}
+          </BlockStack>
         </Layout.Section>
       </Layout>
     </Page>
