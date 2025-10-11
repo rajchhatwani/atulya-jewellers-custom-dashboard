@@ -389,7 +389,6 @@ export async function loader({ request, params }) {
         collection(id: $id) {
           id
           title
-          productsCount
           ${productsQuery} {
             pageInfo {
               hasNextPage
@@ -481,7 +480,6 @@ export async function loader({ request, params }) {
   const collection = {
     id: data.data.collection.id,
     title: data.data.collection.title,
-    productsCount: data.data.collection.productsCount,
     products: filteredProducts,
     pageInfo: data.data.collection.products.pageInfo,
     allProductsFromPage: products, // Keep unfiltered for export
